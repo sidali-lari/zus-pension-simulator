@@ -1,0 +1,28 @@
+
+
+{
+  "age": 40,
+  "sex": "M",
+  "gross_salary_now": 10000,
+  "start_year": 2010,
+  "include_sickleave": true,
+  "desired_pension": 6500,
+  "postal_code": "00-001",
+  "valorization_rule": "CPI_plus_alpha_wage",
+  "valorization_alpha": 0.2,
+  "historical_salaries": [
+    { "year": 2019, "monthly_salary": 6800 },
+    { "year": 2020, "monthly_salary": 7000 }
+  ],
+  "future_wage_growth": [
+    { "year": 2026, "mult": 1.04 },
+    { "year": 2027, "mult": 1.03 }
+  ],
+  "indexation_override": [
+    { "year": 2026, "mult": 1.03 }
+  ],
+  "sickleave_periods": [
+    { "year": 2024, "fraction": 0.05 },
+    { "year": 2025, "fraction": 0.03 }
+  ]
+}
