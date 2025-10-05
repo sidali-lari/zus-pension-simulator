@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
+from supabase import create_client, Client
 
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_absolute_percentage_error, mean_absolute_error
@@ -57,6 +58,10 @@ DATA_PATH = os.environ.get("ZUS_CSV_PATH", "data/processed/zus_forecast_all.csv"
 
 BASE_AVG_WAGE_TODAY = float(os.environ.get("BASE_AVG_WAGE_TODAY", "8000"))
 
+# Supabase configuration
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
 USAGE_XLS = "zus_usage_report.xls"
 USAGE_XLSX = "zus_usage_report.xlsx"
 
@@ -65,6 +70,23 @@ USAGE_XLSX = "zus_usage_report.xlsx"
 # -------------------------------
 app = Flask(__name__)
 CORS(app)
+
+# -------------------------------
+# Supabase client
+# -------------------------------
+supabase: Optional[Client] = None
+
+def init_supabase():
+    global supabase
+    if SUPABASE_URL and SUPABASE_KEY:
+        try:
+            supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+            print("Supabase client initialized successfully")
+        except Exception as e:
+            print(f"Failed to initialize Supabase client: {e}")
+            supabase = None
+    else:
+        print("Supabase credentials not provided, database saving disabled")
 
 # -------------------------------
 # Inputs
@@ -620,6 +642,35 @@ def usage_record_row(ui: UserInputs, sim: Dict) -> Dict:
         "Planned year of ending professional activity": sim["retirement_year"],
     }
 
+def save_forecast_to_supabase(ui: UserInputs, sim: Dict) -> bool:
+    """Save forecast data to Supabase 'forecast' table"""
+    if not supabase:
+        return False
+    
+    try:
+        # Prepare data according to the specified format
+        forecast_data = {
+            'data_symulacji': datetime.now().strftime('%d.%m.%Y, %H:%M'),
+            'wiek': ui.age,
+            'plec': ui.sex,
+            'wynagrodzenie': ui.gross_salary_now,
+            'kod_pocztowy': ui.postal_code or '—',
+            'pozadana_emerytura': ui.desired_pension,
+            'zgromadzone_srodki': ui.accumulated_now,
+            'l4_wliczone': 'Tak' if ui.include_sickleave else 'Nie',
+            'prognozowana_emerytura': sim.get('pension_first_year_nominal'),
+            'realna_emerytura': sim.get('pension_first_year_real_today')
+        }
+        
+        # Insert into Supabase
+        result = supabase.table('forecast').insert(forecast_data).execute()
+        print(f"Forecast data saved to Supabase: {result}")
+        return True
+        
+    except Exception as e:
+        print(f"Failed to save forecast to Supabase: {e}")
+        return False
+
 def append_usage_report(records: List[Dict]):
     df_new = pd.DataFrame.from_records(records)
 
@@ -708,6 +759,9 @@ def init_pipeline():
     model_metrics = cv_metrics_xgb(X, y, n_splits=3)
 
     macro_with_rr = forecast_rr_recursive_xgb(xgb_model, macro_annual, lags=[1, 2, 3, 4], end_year=2080)
+    
+    # Initialize Supabase
+    init_supabase()
 
 # -------------------------------
 # Routes
@@ -755,8 +809,18 @@ def forecast():
             ui, macro_with_rr, life_expectancy_at_ret=life_exp,
             annuity_discount_rate=0.02, base_avg_wage_today_pln=BASE_AVG_WAGE_TODAY
         )
+        # Save to Supabase
+        supabase_saved = save_forecast_to_supabase(ui, sim)
+        
+        # Save to local Excel (existing functionality)
         saved_path = append_usage_report([usage_record_row(ui, sim)])
-        return jsonify({"inputs": asdict(ui), "result": sim, "admin_usage_saved_to": saved_path})
+        
+        return jsonify({
+            "inputs": asdict(ui), 
+            "result": sim, 
+            "admin_usage_saved_to": saved_path,
+            "supabase_saved": supabase_saved
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
