@@ -29,7 +29,12 @@ import numpy as np
 import pandas as pd
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
-from supabase import create_client, Client
+try:
+    from supabase import create_client, Client
+except ImportError:
+    print("Warning: Supabase not available, database saving will be disabled")
+    create_client = None
+    Client = None
 
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_absolute_percentage_error, mean_absolute_error
@@ -78,6 +83,11 @@ supabase: Optional[Client] = None
 
 def init_supabase():
     global supabase
+    if not create_client:
+        print("Supabase not available, database saving disabled")
+        supabase = None
+        return
+        
     if SUPABASE_URL and SUPABASE_KEY:
         try:
             supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -87,6 +97,7 @@ def init_supabase():
             supabase = None
     else:
         print("Supabase credentials not provided, database saving disabled")
+        supabase = None
 
 # -------------------------------
 # Inputs
@@ -644,7 +655,7 @@ def usage_record_row(ui: UserInputs, sim: Dict) -> Dict:
 
 def save_forecast_to_supabase(ui: UserInputs, sim: Dict) -> bool:
     """Save forecast data to Supabase 'forecast' table"""
-    if not supabase:
+    if not supabase or not create_client:
         return False
     
     try:
