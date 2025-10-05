@@ -34,9 +34,6 @@ PORT=8000
 ZUS_CSV_PATH=data/processed/zus_forecast_all.csv
 BASE_AVG_WAGE_TODAY=8000
 
-# Supabase configuration
-SUPABASE_URL=https://ehddhxqzeqvxrhblpzag.supabase.co
-SUPABASE_KEY=sb_secret_Qv84H7GycMBMWz-iTITFRA_Z_o11PYh
 EOF
     echo "✅ Created .env file with Supabase credentials"
 else
